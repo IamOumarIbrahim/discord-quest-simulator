@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+
+# Runtime Generated Simulation Files
+pseudo_games/
+*.exe
+
+# Logs and system artifacts
+*.log
+.vscode/
+.idea/
+
+# Environment and sensitive keys
+.env
+.env.*
+secrets.json
+token.txt
