@@ -4,6 +4,7 @@
  * Paste this script directly into Discord Desktop App's Developer Tools Console (Ctrl + Shift + I).
  *
  * It automatically handles:
+ *  - AUTO-ENROLL: Enrolls in any available quest that you haven't clicked "Accept Quest" on!
  *  - WATCH_VIDEO quests: Completes INSTANTLY in 1 second!
  *  - PLAY_ON_DESKTOP quests: Spoofs Discord's RunningGameStore so Discord natively
  *    sends real, authenticated heartbeats in the background without needing the actual game!
@@ -56,31 +57,42 @@
     return;
   }
 
-  let enrolledQuests = allQuests.filter((x) => {
-    const isEnrolled = !!(x?.userStatus?.enrolledAt || x?.user_status?.enrolled_at);
+  let questsToProcess = allQuests.filter((x) => {
     const isCompleted = !!(x?.userStatus?.completedAt || x?.user_status?.completed_at);
     const taskCfg = x?.config?.taskConfigV2 || x?.config?.task_config_v2 || x?.config?.taskConfig || x?.config?.task_config;
     const tasks = taskCfg?.tasks || {};
     const hasSupported = supportedTasks.some((t) => tasks[t] != null);
-    return isEnrolled && !isCompleted && hasSupported;
+    return !isCompleted && hasSupported;
   });
 
-  if (enrolledQuests.length === 0) {
-    console.log("%c[!] No incomplete enrolled quests found! Make sure you clicked 'Accept Quest' on your desired quest first.", "color: #f1c40f; font-weight: bold; font-size: 14px;");
+  if (questsToProcess.length === 0) {
+    console.log("%c[✓] All available quests are already completed! Nothing to do.", "color: #2ecc71; font-weight: bold; font-size: 14px;");
     return;
   }
 
-  console.log(`%c[+] Found ${enrolledQuests.length} active quest(s) to process!`, "color: #2ecc71; font-weight: bold; font-size: 16px;");
+  console.log(`%c[+] Found ${questsToProcess.length} eligible quest(s) to process!`, "color: #2ecc71; font-weight: bold; font-size: 16px;");
 
-  function processNext() {
-    const quest = enrolledQuests.pop();
+  async function processNext() {
+    const quest = questsToProcess.pop();
     if (!quest) {
-      console.log("%c[🎉] ALL QUESTS COMPLETED! Enjoy your Orbs!", "color: #9b59b6; font-weight: bold; font-size: 18px;");
+      console.log("%c[🎉] ALL QUESTS COMPLETED! Enjoy your Orbs & Rewards!", "color: #9b59b6; font-weight: bold; font-size: 18px;");
       return;
     }
 
     const cfg = quest.config;
     const questName = cfg.messages?.questName || cfg.messages?.quest_name || cfg.id;
+    const isEnrolled = !!(quest.userStatus?.enrolledAt || quest.user_status?.enrolled_at);
+
+    if (!isEnrolled) {
+      console.log(`%c[+] Auto-enrolling in quest: ${questName}...`, "color: #f39c12; font-weight: bold;");
+      try {
+        await api.post({ url: `/quests/${quest.id}/enroll`, body: { location: 0 } });
+        console.log(`%c    [✓] Successfully enrolled in ${questName}!`, "color: #2ecc71;");
+      } catch (err) {
+        console.warn(`    [!] Enrollment attempt failed:`, err);
+      }
+    }
+
     const taskCfg = cfg.taskConfigV2 || cfg.task_config_v2 || cfg.taskConfig || cfg.task_config;
     const tasks = taskCfg.tasks || {};
     const taskName = supportedTasks.find((t) => tasks[t] != null);
@@ -109,7 +121,7 @@
       api.get({ url: `/applications/public?application_ids=${applicationId}` })
         .then((res) => {
           const appData = res.body?.[0] || { name: cfg.messages?.game_title || "Game", executables: [] };
-          const exeName = appData.executables?.find((x) => x.os === "win32")?.name?.replace(">", "") || `${appData.name.replace(/[^a-zA-Z0-9_-]/g, "")}.exe`;
+          const exeName = appData.executables?.find((x) => x.os === "win32")?.name?.replace(">", "")?.split("/").pop() || `${appData.name.replace(/[^a-zA-Z0-9_-]/g, "")}.exe`;
           const pid = Math.floor(Math.random() * 20000) + 10000;
 
           const fakeGame = {
@@ -141,7 +153,7 @@
             games: fakeGames,
           });
 
-          console.log(`%c    [🎮] Spoofed Running Game: "${appData.name}" (PID ${pid})`, "color: #1abc9c; font-weight: bold;");
+          console.log(`%c    [🎮] Spoofed Running Game: "${appData.name}" (${exeName}, PID ${pid})`, "color: #1abc9c; font-weight: bold;");
           console.log(`    [ℹ] Discord will now automatically send genuine quest heartbeats every 30s.`);
           console.log(`    [⏳] Progress will update live in your Discord Quests tab!`);
 

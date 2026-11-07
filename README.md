@@ -33,41 +33,52 @@ When Genshin Impact is running on your machine:
 ### Method 1: In-Discord Webpack Completer (Recommended — Instant & Safe)
 Because Discord's own desktop client already holds all session credentials and authentication tokens, we can hook into Discord's internal `RunningGameStore` directly.
 
-1. **Enable DevTools in Discord**:
+1. **Enable DevTools in Discord** (already enabled by our script in `%APPDATA%\discord\settings.json`):
    ```bash
-   python discord_quest_simulator.py --enable-devtools
+   python orbs/discord_quest_simulator.py --enable-devtools
    ```
 2. **Restart Discord** (close and re-open Discord).
 3. **Copy the Completer Script**:
    ```bash
-   python discord_quest_simulator.py --copy-script
+   python orbs/discord_quest_simulator.py --copy-script
    ```
-   *(Or copy the contents of `discord_console_completer.js` manually).*
+   *(Or copy the contents of `orbs/discord_console_completer.js` manually).*
 4. Inside Discord, press **`Ctrl + Shift + I`** to open Developer Tools.
 5. Click the **Console** tab.
 6. Press **`Ctrl + V`** and hit **Enter**.
+   - **Auto-Enroll**: Automatically accepts all unaccepted quests!
    - **Video Quests**: Completed **instantly in 1 second**!
    - **Play Quests**: Spoofs `RunningGameStore` and dispatches `RUNNING_GAMES_CHANGE` so Discord's own client sends the real authenticated heartbeats in the background every 30s.
 
 ---
 
 ### Method 2: Desktop Pseudo-Application Engine (Windows Native)
-If you prefer running a simulated desktop application that Discord detects natively without touching the console:
+If you prefer running simulated desktop applications that Discord detects natively without touching the console:
 
 ```bash
-python discord_quest_simulator.py --mode pseudo
+# Run all games:
+python orbs/discord_quest_simulator.py --mode pseudo
+
+# Or run specific games by keyword:
+python orbs/discord_quest_simulator.py --mode pseudo --games wow,maple,roblox,cod,endfield
 ```
 - Creates a dedicated folder for each game.
 - Automatically registers the application in Windows Registry under `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall` with the verified game publisher and metadata.
-- Launches a lightweight GUI window (`pythonw.exe`) with the exact game title and process name (`endfield.exe`, `wwm.exe`, etc.).
+- Launches a lightweight GUI window (`pythonw.exe`) with the exact game title and process name (`wow.exe`, `maplestory.exe`, `roblox.exe`, `sp26-cod.exe`, `endfield.exe`, etc.).
 - Discord's native `identifyGame` returns `result: 0` (success), recognizing the game natively just like Genshin Impact!
 - When you press `Ctrl + C`, all registry entries and processes are cleanly removed.
 
 ---
 
-## 📋 View Live Quests
+## 📋 Additional CLI Commands
 
-To see all your active enrolled quests and their real-time progress:
 ```bash
-python discord_quest_simulator.py --mode quests --token YOUR_TOKEN
+# View all live enrolled & available quests:
+python orbs/discord_quest_simulator.py --mode quests --token YOUR_TOKEN
+
+# Automatically accept/enroll in all available quests:
+python orbs/discord_quest_simulator.py --mode enroll --token YOUR_TOKEN
+
+# Instantly finish all video quests:
+python orbs/discord_quest_simulator.py --mode video --token YOUR_TOKEN
 ```

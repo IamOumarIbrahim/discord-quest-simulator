@@ -22,7 +22,8 @@ How Discord Detects Applications:
      which completes INSTANTLY.
 
 Features:
-  - Live Quest Viewer: Fetches your enrolled quests directly from `GET /api/v9/quests/@me`.
+  - Live Quest Viewer: Fetches your enrolled & available quests directly from `GET /api/v9/quests/@me`.
+  - One-Click Auto-Enrollment: Automatically accepts all available quests via API (`POST /quests/{id}/enroll`).
   - Instant Video Completer: Completes video quests in 1 second via API.
   - One-Click DevTools Enabler: Patches `%APPDATA%\\discord\\settings.json` to enable
     `Ctrl + Shift + I` in Discord Desktop.
@@ -56,11 +57,59 @@ DISCORD_SETTINGS_PATH = os.path.expandvars(r"%APPDATA%\discord\settings.json")
 # Verified Quest Database matching Discord's Detectable Games & Current Quests
 QUEST_GAMES = [
     {
+        "name": "World of Warcraft: Forever",
+        "app_id": "1553234742529364018",
+        "quest_id": "1552876032875560980",
+        "executables": ["wow.exe", "wowb.exe"],
+        "publisher": "Blizzard Entertainment",
+        "orbs": 700
+    },
+    {
+        "name": "MapleStory Classic World",
+        "app_id": "1565580212664795249",
+        "quest_id": "1552381793074675762",
+        "executables": ["maplestory.exe"],
+        "publisher": "Nexon America",
+        "orbs": 700
+    },
+    {
+        "name": "Basketball Zero",
+        "app_id": "363445589247131668",
+        "quest_id": "1567609063297130518",
+        "executables": ["roblox.exe", "robloxplayerbeta.exe"],
+        "publisher": "ROBLOX",
+        "orbs": 700
+    },
+    {
+        "name": "Call of Duty: Modern Warfare 4",
+        "app_id": "1511443377927880775",
+        "quest_id": "1565824572396277880",
+        "executables": ["sp26-cod.exe", "cod26-cod.exe"],
+        "publisher": "Activision",
+        "orbs": 700
+    },
+    {
         "name": "Arknights: Endfield",
         "app_id": "1461154307171811401",
-        "quest_id": "1555080843502813245",
+        "quest_id": "1565590271301779568",
         "executables": ["endfield.exe"],
         "publisher": "GRYPHLINE",
+        "orbs": 700
+    },
+    {
+        "name": "EA SPORTS FC 27",
+        "app_id": "1531874756096295054",
+        "quest_id": "1563322864659202169",
+        "executables": ["fc26.exe", "fc27.exe"],
+        "publisher": "Electronic Arts",
+        "orbs": 700
+    },
+    {
+        "name": "Resident Evil (Sale Quest)",
+        "app_id": "1456485028350656512",
+        "quest_id": "1560042472560787507",
+        "executables": ["re2.exe", "re9.exe"],
+        "publisher": "Capcom",
         "orbs": 700
     },
     {
@@ -88,43 +137,11 @@ QUEST_GAMES = [
         "orbs": 700
     },
     {
-        "name": "Call of Duty: Modern Warfare 4",
-        "app_id": "1511443377927880775",
-        "quest_id": "1552893313500184617",
-        "executables": ["sp26-cod.exe"],
-        "publisher": "Activision",
-        "orbs": 700
-    },
-    {
-        "name": "Resident Evil (Sale Quest)",
-        "app_id": "1129504165727584307",
-        "quest_id": "1560042472560787507",
-        "executables": ["re2.exe"],
-        "publisher": "Capcom",
-        "orbs": 700
-    },
-    {
-        "name": "EA SPORTS FC 27",
-        "app_id": "1531874756096295054",
-        "quest_id": "1563322864659202169",
-        "executables": ["fc26.exe"],
-        "publisher": "Electronic Arts",
-        "orbs": 700
-    },
-    {
         "name": "VALORANT",
         "app_id": "700136079562375258",
         "quest_id": "1549142163487592600",
         "executables": ["valorant-win64-shipping.exe"],
         "publisher": "Riot Games",
-        "orbs": 700
-    },
-    {
-        "name": "ROBLOX",
-        "app_id": "363445589247131668",
-        "quest_id": "1562915304299044884",
-        "executables": ["roblox.exe"],
-        "publisher": "Roblox Corporation",
         "orbs": 700
     }
 ]
@@ -162,8 +179,27 @@ def fetch_user_quests(token: str) -> Optional[List[Dict[str, Any]]]:
         print(RED(f"[-] Connection Error: {e}"))
         return None
 
+def enroll_in_quest(token: str, quest_id: str) -> bool:
+    """Accept/Enroll in a quest via Discord API."""
+    url = f"{DISCORD_API}/quests/{quest_id}/enroll"
+    payload = json.dumps({"location": 0}).encode("utf-8")
+    req = urllib.request.Request(url, data=payload, method="POST", headers={
+        "Authorization": token,
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            return data.get("enrolled_at") is not None
+    except Exception as e:
+        print(RED(f"[-] Enrollment error for quest {quest_id}: {e}"))
+        return False
+
 def complete_video_quest(token: str, quest_id: str, seconds: int = 900) -> bool:
     """Instant completion for video quests via the video-progress endpoint."""
+    # Ensure enrolled first
+    enroll_in_quest(token, quest_id)
     url = f"{DISCORD_API}/quests/{quest_id}/video-progress"
     payload = json.dumps({"timestamp": seconds}).encode("utf-8")
     req = urllib.request.Request(url, data=payload, method="POST", headers={
@@ -223,7 +259,6 @@ def copy_completer_to_clipboard() -> bool:
         code = f.read()
 
     try:
-        # Use PowerShell Set-Clipboard
         proc = subprocess.Popen(["powershell", "-NoProfile", "-Command", "Set-Clipboard -Value $input"],
                                 stdin=subprocess.PIPE)
         proc.communicate(input=code.encode("utf-8"))
@@ -327,8 +362,8 @@ def run_desktop_simulation(selected_games: List[Dict[str, Any]], duration_minute
     manager = PseudoGameManager(base_dir)
 
     print(BOLD(f"\n[+] Starting Desktop Pseudo-Application Simulation"))
-    print(DIM("    Each application will be registered in Windows Registry & launched with a GUI window."))
-    print(DIM("    Discord's native game detector will recognize it as a verified game.\n"))
+    print(DIM("    Each application is registered in Windows Registry & launched with an authentic GUI window."))
+    print(DIM("    Discord's native game detector recognizes it as a verified game.\n"))
 
     for g in selected_games:
         manager.launch_game(g)
@@ -372,14 +407,15 @@ def show_live_quests(token: str):
         return
 
     enrolled = [q for q in quests if (q.get("user_status") or {}).get("enrolled_at") and not (q.get("user_status") or {}).get("completed_at")]
+    available = [q for q in quests if not (q.get("user_status") or {}).get("enrolled_at") and not (q.get("user_status") or {}).get("completed_at")]
     completed = [q for q in quests if (q.get("user_status") or {}).get("completed_at")]
 
-    print(BOLD(f"\n{'═'*70}"))
+    print(BOLD(f"\n{'═'*75}"))
     print(CYAN(BOLD(f"  ACTIVE ENROLLED QUESTS ({len(enrolled)} Incomplete)")))
-    print(BOLD(f"{'═'*70}"))
+    print(BOLD(f"{'═'*75}"))
 
     if not enrolled:
-        print(YELLOW("  No incomplete enrolled quests! Accept a quest in Discord's Quest tab first."))
+        print(YELLOW("  No incomplete enrolled quests!"))
     else:
         for q in enrolled:
             cfg = q.get("config", {})
@@ -402,9 +438,46 @@ def show_live_quests(token: str):
             print(f"  • {BOLD(name)} ({game_title})")
             print(f"    Task: {', '.join(task_names)} | Progress: {val}/{target}s ({pct}%) | ID: {q.get('id')}")
 
-    print(BOLD(f"\n{'─'*70}"))
+    if available:
+        print(BOLD(f"\n{'─'*75}"))
+        print(YELLOW(BOLD(f"  AVAILABLE QUESTS (Not Yet Accepted: {len(available)})")))
+        print(BOLD(f"{'─'*75}"))
+        for q in available:
+            cfg = q.get("config", {})
+            msgs = cfg.get("messages", {})
+            name = msgs.get("quest_name") or cfg.get("quest_name") or q.get("id")
+            game_title = msgs.get("game_title") or "Game"
+            task_cfg = cfg.get("task_config_v2", {}).get("tasks", {})
+            task_names = list(task_cfg.keys())
+            print(f"  • {BOLD(name)} ({game_title}) | Type: {', '.join(task_names)} | ID: {q.get('id')}")
+
+    print(BOLD(f"\n{'─'*75}"))
     print(DIM(f"  Completed Quests: {len(completed)}"))
-    print(BOLD(f"{'─'*70}\n"))
+    print(BOLD(f"{'─'*75}\n"))
+
+def auto_enroll_all(token: str):
+    print(BOLD("\n[+] Checking for available quests to auto-enroll..."))
+    quests = fetch_user_quests(token)
+    if not quests:
+        return
+    count = 0
+    for q in quests:
+        user_status = q.get("user_status") or {}
+        if not user_status.get("enrolled_at") and not user_status.get("completed_at"):
+            qid = q.get("id")
+            cfg = q.get("config", {})
+            name = cfg.get("messages", {}).get("quest_name") or cfg.get("quest_name") or qid
+            print(f"[*] Auto-enrolling in: {BOLD(name)} (ID {qid})...")
+            if enroll_in_quest(token, qid):
+                print(GREEN(f"  [✓] Enrolled in {name}!"))
+                count += 1
+            else:
+                print(YELLOW(f"  [!] Failed to enroll in {name}"))
+            time.sleep(0.3)
+    if count == 0:
+        print(GREEN("[✓] All available quests are already enrolled!"))
+    else:
+        print(GREEN(f"[✓] Successfully enrolled in {count} new quests!"))
 
 def interactive_menu():
     print(BOLD(CYAN("""
@@ -412,13 +485,14 @@ def interactive_menu():
 ║           DISCORD QUEST SIMULATOR & COMPLETER (ORBS)             ║
 ╚══════════════════════════════════════════════════════════════════╝
 """)))
-    print("  1. " + BOLD("View Live Enrolled Quests & Progress") + " (via Discord Token)")
+    print("  1. " + BOLD("View Live Enrolled & Available Quests") + " (via Discord Token)")
     print("  2. " + GREEN(BOLD("⚡ Instant Console Completer")) + " (Enable DevTools + Copy Script)")
     print("  3. " + CYAN(BOLD("🖥 Launch Desktop Pseudo-Applications")) + " (Native Windows Detection)")
     print("  4. " + MAGENTA(BOLD("▶ Instantly Complete Video Quests")) + " (No wait)")
+    print("  5. " + YELLOW(BOLD("📥 Auto-Enroll In All Available Quests")) + " (One Click)")
     print("  0. Exit\n")
 
-    choice = input(BOLD("Select an option [1-4]: ")).strip()
+    choice = input(BOLD("Select an option [1-5]: ")).strip()
 
     if choice == "1":
         token = input("Enter your Discord token: ").strip()
@@ -467,6 +541,10 @@ def interactive_menu():
                             print(GREEN(f"[✓] {name} COMPLETED!"))
                         else:
                             print(YELLOW(f"[!] Could not complete {name}"))
+    elif choice == "5":
+        token = input("Enter your Discord token: ").strip()
+        if token:
+            auto_enroll_all(token)
     else:
         print("Exiting.")
 
@@ -475,8 +553,9 @@ def main():
     parser.add_argument("--token", type=str, help="Discord user token")
     parser.add_argument("--enable-devtools", action="store_true", help="Enable DevTools in Discord settings.json")
     parser.add_argument("--copy-script", action="store_true", help="Copy console completer script to clipboard")
-    parser.add_argument("--mode", choices=["pseudo", "quests", "video"], help="Run directly without interactive menu")
+    parser.add_argument("--mode", choices=["pseudo", "quests", "video", "enroll"], help="Run directly without interactive menu")
     parser.add_argument("--duration", type=float, default=15.0, help="Duration for pseudo game mode in minutes")
+    parser.add_argument("--games", type=str, help="Comma-separated keywords of games to run (e.g. wow,maple,roblox,cod,endfield)")
     args = parser.parse_args()
 
     if args.enable_devtools:
@@ -491,8 +570,31 @@ def main():
         show_live_quests(args.token)
         return
 
+    if args.mode == "enroll" and args.token:
+        auto_enroll_all(args.token)
+        return
+
+    if args.mode == "video" and args.token:
+        quests = fetch_user_quests(args.token)
+        if quests:
+            for q in quests:
+                cfg = q.get("config", {})
+                task_cfg = cfg.get("task_config_v2", {}).get("tasks", {})
+                if "WATCH_VIDEO" in task_cfg:
+                    name = cfg.get("messages", {}).get("quest_name", q.get("id"))
+                    print(f"[*] Found Video Quest: {name} (ID {q.get('id')}). Completing...")
+                    complete_video_quest(args.token, q.get("id"))
+        return
+
     if args.mode == "pseudo":
-        run_desktop_simulation(QUEST_GAMES, args.duration)
+        if args.games:
+            kw = [k.strip().lower() for k in args.games.split(",")]
+            selected = [g for g in QUEST_GAMES if any(k in g["name"].lower() or any(k in exe.lower() for exe in g["executables"]) for k in kw)]
+            if not selected:
+                selected = QUEST_GAMES
+        else:
+            selected = QUEST_GAMES
+        run_desktop_simulation(selected, args.duration)
         return
 
     interactive_menu()
