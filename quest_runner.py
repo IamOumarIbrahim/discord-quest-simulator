@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Discord Quest Runner (Linux)
+Discord Quest Runner (Linux and Windows)
 
 Search Discord's list of detectable games, pick the ones you want, press Start.
 For each pick we run a tiny window from a *copy* of the Python binary named like
@@ -14,9 +14,18 @@ import json, os, shutil, subprocess, sys, threading, time, urllib.request
 import tkinter as tk
 from tkinter import ttk, messagebox
 
+IS_WIN = os.name == "nt"
+if IS_WIN:
+    import winreg
+
 API = "https://discord.com/api/v9/applications/detectable"
-DATA = os.path.join(os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache")),
-                    "discord-quest-runner")
+if IS_WIN:
+    _base = os.environ.get("LOCALAPPDATA", os.path.expanduser("~\\AppData\\Local"))
+else:
+    _base = os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache"))
+DATA = os.path.join(_base, "discord-quest-runner")
+UNINSTALL_KEY = r"Software\Microsoft\Windows\CurrentVersion\Uninstall"
+REG_PREFIX = "DiscordQuestRunner_"
 CACHE = os.path.join(DATA, "detectable.json")
 SELECTION = os.path.join(DATA, "selection.json")
 GAMES_DIR = os.path.join(DATA, "games")
@@ -92,6 +101,44 @@ def search(games, query, quest_only=False, limit=400):
 
 
 # ------------------------------------------------------------------- running
+def python_binary():
+    """The interpreter to copy. Windows: pythonw.exe (no console window)."""
+    exe = os.path.realpath(sys.executable)
+    if IS_WIN:
+        w = os.path.join(os.path.dirname(exe), "pythonw.exe")
+        return w if os.path.exists(w) else exe
+    return exe
+
+
+def register_windows(game, folder, target):
+    """Discord's scanner also checks Uninstall registry entries for installed games."""
+    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, f"{UNINSTALL_KEY}\\{REG_PREFIX}{game['id']}") as k:
+        winreg.SetValueEx(k, "DisplayName", 0, winreg.REG_SZ, game["name"])
+        winreg.SetValueEx(k, "InstallLocation", 0, winreg.REG_SZ, folder)
+        winreg.SetValueEx(k, "DisplayIcon", 0, winreg.REG_SZ, target)
+        winreg.SetValueEx(k, "Publisher", 0, winreg.REG_SZ, game["name"])
+
+
+def unregister_windows(gid):
+    try:
+        winreg.DeleteKey(winreg.HKEY_CURRENT_USER, f"{UNINSTALL_KEY}\\{REG_PREFIX}{gid}")
+    except OSError:
+        pass
+
+
+def cleanup_stale_windows_keys():
+    """Remove entries left behind by a crash."""
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, UNINSTALL_KEY) as k:
+            n = winreg.QueryInfoKey(k)[0]
+            stale = [winreg.EnumKey(k, i) for i in range(n)]
+        for name in stale:
+            if name.startswith(REG_PREFIX):
+                unregister_windows(name[len(REG_PREFIX):])
+    except OSError:
+        pass
+
+
 class Runner:
     def __init__(self):
         self.procs = {}  # game id -> Popen
@@ -108,10 +155,13 @@ class Runner:
         os.makedirs(os.path.dirname(target), exist_ok=True)
         if os.path.lexists(target):
             os.remove(target)
-        # A real copy: Discord reads the resolved /proc/<pid>/exe, a symlink would not match.
-        shutil.copy2(os.path.realpath(sys.executable), target)
+        # A real copy: Discord reads the resolved exe path, a symlink would not match.
+        shutil.copy2(python_binary(), target)
         env = os.environ.copy()
         env["PYTHONHOME"] = sys.base_prefix  # the copy can't locate the stdlib otherwise
+        if IS_WIN:  # the copy also needs python3xx.dll, which lives next to the original
+            env["PATH"] = os.path.dirname(python_binary()) + os.pathsep + env.get("PATH", "")
+            register_windows(game, folder, target)
         self.procs[game["id"]] = subprocess.Popen(
             [target, WINDOW_PY, game["name"]], env=env,
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -132,6 +182,8 @@ class Runner:
         d = self.dirs.pop(gid, None)
         if d:
             shutil.rmtree(d, ignore_errors=True)
+        if IS_WIN:
+            unregister_windows(gid)
 
     def stop_all(self):
         for gid in list(self.procs):
@@ -355,9 +407,13 @@ def selftest():
     r.start(g)
     time.sleep(1.5)
     pid = r.procs[g["id"]].pid
-    exe = os.readlink(f"/proc/{pid}/exe")
-    ok = exe.endswith(g["exe"]) and r.running(g["id"])
-    print(f"{g['name']}: /proc/{pid}/exe -> {exe}  {'OK' if ok else 'FAIL'}")
+    if IS_WIN:
+        exe = os.path.join(GAMES_DIR, g["id"], *g["exe"].split("/"))
+        ok = os.path.exists(exe) and r.running(g["id"])
+    else:
+        exe = os.readlink(f"/proc/{pid}/exe")
+        ok = exe.endswith(g["exe"]) and r.running(g["id"])
+    print(f"{g['name']}: pid {pid} -> {exe}  {'OK' if ok else 'FAIL'}")
     r.stop_all()
     sys.exit(0 if ok else 1)
 
@@ -365,6 +421,8 @@ def selftest():
 if __name__ == "__main__":
     if "--selftest" in sys.argv:
         selftest()
+    if IS_WIN:
+        cleanup_stale_windows_keys()
     root = tk.Tk()
     App(root)
     root.mainloop()
