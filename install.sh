@@ -13,7 +13,7 @@ CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/discord-quest-runner"
 
 if [ "${1:-}" = "--uninstall" ]; then
   pkill -f "$APP_DIR/quest_runner.py" 2>/dev/null || true
-  rm -rf "$APP_DIR" "$BIN" "$DESKTOP" "$CACHE"
+  rm -rf "$APP_DIR" "$BIN" "$HOME/.local/bin/discord-video-quests" "$DESKTOP" "${DESKTOP%.desktop}-video.desktop" "$CACHE"
   echo "Uninstalled."
   exit 0
 fi
@@ -29,17 +29,22 @@ fi
 
 mkdir -p "$APP_DIR" "$(dirname "$BIN")" "$(dirname "$DESKTOP")"
 
-# Use the local copy when run from a checkout, otherwise download.
+# Use local copies when run from a checkout, otherwise download.
 SRC="$(dirname "${BASH_SOURCE[0]:-}")"
-if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "$SRC/quest_runner.py" ]; then
-  cp "$SRC/quest_runner.py" "$APP_DIR/quest_runner.py"
-else
-  curl -fsSL "$RAW/quest_runner.py" -o "$APP_DIR/quest_runner.py"
-fi
-chmod +x "$APP_DIR/quest_runner.py"
+for f in quest_runner.py video_quest.py; do
+  if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "$SRC/$f" ]; then
+    cp "$SRC/$f" "$APP_DIR/$f"
+  else
+    curl -fsSL "$RAW/$f" -o "$APP_DIR/$f"
+  fi
+  chmod +x "$APP_DIR/$f"
+done
 
 printf '#!/bin/sh\nexec python3 "%s/quest_runner.py" "$@"\n' "$APP_DIR" > "$BIN"
 chmod +x "$BIN"
+VBIN="$HOME/.local/bin/discord-video-quests"
+printf '#!/bin/sh\nexec python3 "%s/video_quest.py" --launch --pause "$@"\n' "$APP_DIR" > "$VBIN"
+chmod +x "$VBIN"
 
 cat > "$DESKTOP" <<EOF
 [Desktop Entry]
@@ -51,7 +56,17 @@ Icon=applications-games
 Terminal=false
 Categories=Utility;Game;
 EOF
+cat > "${DESKTOP%.desktop}-video.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=Discord Video Quests
+Comment=Auto-complete watch-the-video quests
+Exec=$VBIN
+Icon=video-x-generic
+Terminal=true
+Categories=Utility;Game;
+EOF
 command -v update-desktop-database >/dev/null && update-desktop-database "$(dirname "$DESKTOP")" 2>/dev/null || true
 
-echo "Installed. Launch 'Discord Quest Runner' from your app menu, or run: discord-quest-runner"
+echo "Installed. Open 'Discord Quest Runner' (games) or 'Discord Video Quests' (watch-the-video quests) from your app menu."
 case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) echo "(add ~/.local/bin to PATH to use the command)";; esac

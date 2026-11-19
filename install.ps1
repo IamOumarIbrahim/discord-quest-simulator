@@ -8,12 +8,13 @@ $Raw      = 'https://raw.githubusercontent.com/IamOumarIbrahim/discord-quest-sim
 $AppDir   = Join-Path $env:LOCALAPPDATA 'DiscordQuestRunner'
 $Cache    = Join-Path $env:LOCALAPPDATA 'discord-quest-runner'
 $Shortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'Discord Quest Runner.lnk'
+$VideoShortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'Discord Video Quests.lnk'
 
 if ($Uninstall) {
     Get-CimInstance Win32_Process -Filter "Name='pythonw.exe'" |
         Where-Object { $_.CommandLine -like "*$AppDir*" } |
         ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-    Remove-Item $AppDir, $Cache, $Shortcut -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item $AppDir, $Cache, $Shortcut, $VideoShortcut -Recurse -Force -ErrorAction SilentlyContinue
     Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' |
         Where-Object { $_.PSChildName -like 'DiscordQuestRunner_*' } | Remove-Item -Force -ErrorAction SilentlyContinue
     Write-Host 'Uninstalled.'
@@ -44,17 +45,29 @@ if (-not $pythonw) {
 }
 
 New-Item -ItemType Directory -Force $AppDir | Out-Null
+foreach ($f in @('quest_runner.py', 'video_quest.py')) {
+    $dest  = Join-Path $AppDir $f
+    $local = if ($PSCommandPath) { Join-Path (Split-Path $PSCommandPath) $f } else { $null }
+    if ($local -and (Test-Path $local)) { Copy-Item $local $dest -Force }
+    else { Invoke-WebRequest "$Raw/$f" -OutFile $dest -UseBasicParsing }
+}
 $script = Join-Path $AppDir 'quest_runner.py'
-$local  = if ($PSCommandPath) { Join-Path (Split-Path $PSCommandPath) 'quest_runner.py' } else { $null }
-if ($local -and (Test-Path $local)) { Copy-Item $local $script -Force }
-else { Invoke-WebRequest "$Raw/quest_runner.py" -OutFile $script -UseBasicParsing }
+$video  = Join-Path $AppDir 'video_quest.py'
 
 $ws = New-Object -ComObject WScript.Shell
 $lnk = $ws.CreateShortcut($Shortcut)
 $lnk.TargetPath = $pythonw
-$lnk.Arguments = "`"$script`""
+$lnk.Arguments = "`\"$script`\""
 $lnk.WorkingDirectory = $AppDir
 $lnk.Description = 'Pick games and complete Discord quests'
 $lnk.Save()
 
-Write-Host "Installed. Open 'Discord Quest Runner' from the Start menu."
+# Video quests need a console window (python.exe, not pythonw.exe) so progress is visible.
+$lnk2 = $ws.CreateShortcut($VideoShortcut)
+$lnk2.TargetPath = Join-Path (Split-Path $pythonw) 'python.exe'
+$lnk2.Arguments = "`\"$video`\" --launch --pause"
+$lnk2.WorkingDirectory = $AppDir
+$lnk2.Description = 'Auto-complete watch-the-video Discord quests'
+$lnk2.Save()
+
+Write-Host "Installed. In the Start menu open 'Discord Quest Runner' (games) or 'Discord Video Quests' (watch-the-video quests)."

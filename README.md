@@ -1,108 +1,136 @@
-# Discord Quest Simulator & Completer (Orbs Edition)
+<div align="center">
 
-A reverse-engineered toolkit designed to simulate running games for Discord Quest rewards and complete quests.
+# 🎮 Discord Quest Runner
 
+**Finish Discord Quests and collect your Orbs without playing the game or watching the video.**
 
-## 🖥️ Linux & Windows: one-click install
+Pick the game. Press Start. Do something else.
 
-**Linux**
-```bash
-curl -fsSL https://raw.githubusercontent.com/IamOumarIbrahim/discord-quest-simulator/main/install.sh | bash
-```
+[Install](#-install-takes-1-minute) · [Which tool do I need?](#-which-tool-do-i-need) · [Questions](#-questions-people-ask) · [Something broke](#-something-broke)
 
-**Windows** (PowerShell)
-```powershell
-irm https://raw.githubusercontent.com/IamOumarIbrahim/discord-quest-simulator/main/install.ps1 | iex
-```
-
-Then open **Discord Quest Runner** from your app menu / Start menu (Linux also: `discord-quest-runner`).
-
-1. Type in the search bar: it filters Discord's full list of detectable games on every keystroke (★ marks games with a current quest).
-2. Double-click games to add them to *Selected*.
-3. Press **Start**, accept the quests in Discord, and keep the app open for about 15 minutes.
-
-Needs Python 3 with `tkinter` (Linux: `sudo pacman -S tk` / `sudo apt install python3-tk`; Windows: the python.org installer includes it). Uninstall: `./install.sh --uninstall` (Linux) or run `install.ps1 -Uninstall` (Windows).
-
-**How it works:** Discord's native scanner reads `/proc/<pid>/exe`. For each selected game the app copies the Python binary to a path ending in the game's executable name (for example `.../wwm.exe`) and runs a small window from it. A symlink does not work because it resolves back to `python`. On Windows it uses `pythonw.exe` and also writes a temporary `HKCU` Uninstall registry entry per game (removed on stop), as the original simulator did.
-Games with no executable in Discord's list (NBA 2K27, GTA VI, Firefox, Exoplanet) can't be triggered this way; use `discord_console_completer.js` for those.
+</div>
 
 ---
 
-## 🔍 Root Cause Analysis: How Discord Actually Logs and Verifies Applications
+## ✨ What is this?
 
-By reverse engineering Discord Desktop's native modules (`discord_game_utils.node`, `discord_utils.node`), `core.asar`, and Discord's client runtime logs (`renderer_js.log`), here is how game verification works:
+Discord Quests give you **Orbs** and rewards for things like *"play this game for 15 minutes"* or *"watch this trailer"*. This app does the waiting for you, on **Windows and Linux**.
 
-### 1. Why Genshin Impact Was Detected
-When Genshin Impact is running on your machine:
-- It is registered in the Windows Registry under `HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\Genshin Impact`.
-- Its process path is `C:\Program Files\HoYoPlay\games\Genshin Impact game\GenshinImpact.exe`.
-- Discord's native module runs `ScanUninstallEntries` and calls `identifyGame(pid)`.
-- Because the running executable matches an installed, registered application in Windows Registry, `identifyGame` returns code `0` (Success) with `name: "Genshin Impact"` and extracts its icon.
-- Discord's `RunningGameStore` receives this and logs:
-  `[Clips] decider: handleRunningGamesChange visibleGame=Genshin Impact`
-- Discord's UI displays **"Genshin Impact, Not Sharing"** in the bottom-left panel.
+It comes with two simple tools:
 
-### 2. Why the Initial Dummy Python Script Failed
-- Headless, invisible console processes (`CREATE_NO_WINDOW`) without a top-level Windows GUI handle are classified by Discord's window scanner as **"Non-Games"** (`Running Non-Games Changed`).
-- Unregistered `.exe` files in temporary directories return `identifyGame err: 3` (`name: ""`) and are ignored by Discord's Quest tracking.
-
-### 3. Why External Heartbeats Returned 404 & 401
-- **404**: The endpoint was `/quests/@me` (not `/users/@me/quests`).
-- **401**: Discord's server enforces strict Cloudflare/Session authentication (`x-discord-features: quests`, internal browser cookies, session fingerprinting) on `POST /quests/{id}/heartbeat`. Raw standalone HTTP scripts without the active browser session are rejected with `401 Unauthorised` (`code: 40001`).
+| | Tool | For quests that say... | What it does |
+|---|---|---|---|
+| 🕹️ | **Discord Quest Runner** | *"Play [game] for 15 minutes"* | Search for the game, click it, press **Start**. Discord thinks the game is running and counts your time. |
+| 🎬 | **Discord Video Quests** | *"Watch this video"* | Press one button. It finishes the video quests for you. |
 
 ---
 
-## 🚀 Two Methods to Complete Quests
+## 📥 Install (takes 1 minute)
 
-### Method 1: In-Discord Webpack Completer (Recommended — Instant & Safe)
-Because Discord's own desktop client already holds all session credentials and authentication tokens, we can hook into Discord's internal `RunningGameStore` directly.
+You need **Python 3** on your computer. If you don't have it, the installer tells you where to get it.
 
-1. **Enable DevTools in Discord** (already enabled by our script in `%APPDATA%\discord\settings.json`):
-   ```bash
-   python orbs/discord_quest_simulator.py --enable-devtools
+### 🪟 Windows
+1. Press the **Windows key**, type **PowerShell**, and open it.
+2. Paste this line and press **Enter**:
+   ```powershell
+   irm https://raw.githubusercontent.com/IamOumarIbrahim/discord-quest-simulator/main/install.ps1 | iex
    ```
-2. **Restart Discord** (close and re-open Discord).
-3. **Copy the Completer Script**:
+3. Open the **Start menu**. You'll find **Discord Quest Runner** and **Discord Video Quests**.
+
+### 🐧 Linux
+1. Open **Terminal**.
+2. Paste this line and press **Enter**:
    ```bash
-   python orbs/discord_quest_simulator.py --copy-script
+   curl -fsSL https://raw.githubusercontent.com/IamOumarIbrahim/discord-quest-simulator/main/install.sh | bash
    ```
-   *(Or copy the contents of `orbs/discord_console_completer.js` manually).*
-4. Inside Discord, press **`Ctrl + Shift + I`** to open Developer Tools.
-5. Click the **Console** tab.
-6. Press **`Ctrl + V`** and hit **Enter**.
-   - **Auto-Enroll**: Automatically accepts all unaccepted quests!
-   - **Video Quests**: Completed **instantly in 1 second**!
-   - **Play Quests**: Spoofs `RunningGameStore` and dispatches `RUNNING_GAMES_CHANGE` so Discord's own client sends the real authenticated heartbeats in the background every 30s.
+3. Open your app menu. You'll find **Discord Quest Runner** and **Discord Video Quests**.
+
+> If it says `tkinter is missing`, install it with the command it shows you, then run the line again.
 
 ---
 
-### Method 2: Desktop Pseudo-Application Engine (Windows Native)
-If you prefer running simulated desktop applications that Discord detects natively without touching the console:
+## 🧭 Which tool do I need?
 
-```bash
-# Run all games:
-python orbs/discord_quest_simulator.py --mode pseudo
+Look at your quest on Discord's **Quests** page:
 
-# Or run specific games by keyword:
-python orbs/discord_quest_simulator.py --mode pseudo --games wow,maple,roblox,cod,endfield
-```
-- Creates a dedicated folder for each game.
-- Automatically registers the application in Windows Registry under `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall` with the verified game publisher and metadata.
-- Launches a lightweight GUI window (`pythonw.exe`) with the exact game title and process name (`wow.exe`, `maplestory.exe`, `roblox.exe`, `sp26-cod.exe`, `endfield.exe`, etc.).
-- Discord's native `identifyGame` returns `result: 0` (success), recognizing the game natively just like Genshin Impact!
-- When you press `Ctrl + C`, all registry entries and processes are cleanly removed.
+- It says **"Play ... for 15 minutes"** → use **🕹️ Discord Quest Runner**
+- It says **"Watch the video"** or **"Trailer Quest"** → use **🎬 Discord Video Quests**
 
 ---
 
-## 📋 Additional CLI Commands
+## 🕹️ Using Discord Quest Runner (play-a-game quests)
 
-```bash
-# View all live enrolled & available quests:
-python orbs/discord_quest_simulator.py --mode quests --token YOUR_TOKEN
+1. In Discord, open **Quests** and click **Accept Quest** on the quest you want.
+2. Open **Discord Quest Runner**.
+3. **Type the name of the game** in the search bar. The list shrinks as you type. Games with a current quest have a ⭐.
+4. **Double-click** a game to add it to your *Selected* list. You can add several.
+5. Press **▶ Start**. Small windows appear. That's normal, leave them open.
+6. Wait about **15 minutes**, then claim your reward in Discord.
+7. Press **■ Stop all** (or just close the app) when you're done.
 
-# Automatically accept/enroll in all available quests:
-python orbs/discord_quest_simulator.py --mode enroll --token YOUR_TOKEN
+Your selected games are remembered for next time.
 
-# Instantly finish all video quests:
-python orbs/discord_quest_simulator.py --mode video --token YOUR_TOKEN
-```
+## 🎬 Using Discord Video Quests (watch-the-video quests)
+
+1. Make sure you're **logged in to Discord** and have **accepted** the video quest.
+2. Open **Discord Video Quests**.
+3. It will **restart Discord by itself**. That's expected, so save anything you were typing first.
+4. Watch the progress counting up in the window. When it says **DONE**, go to Discord and click **Claim Reward**.
+
+It takes a few minutes. It can't go faster than Discord allows, which depends on how long ago you accepted the quest.
+
+---
+
+## ❓ Questions people ask
+
+**Is it safe?**
+It never asks for your password and never reads your Discord token. Everything stays on your computer. **But** using tools like this goes against Discord's rules, so there is a small chance of a warning or a ban on your account. Use it at your own risk, ideally not on an account you can't afford to lose.
+
+**Do I need to install the games?**
+No. That's the whole point.
+
+**I clicked Start but the quest isn't moving.**
+Make sure you pressed **Accept Quest** in Discord first, keep the small windows open, and give it a couple of minutes. Quests move in steps, not second by second.
+
+**Some quests aren't in the list.**
+A few quests (for example Firefox's *play* quest and Audible's Exoplanet) aren't tied to a game program, so the Quest Runner can't do them. Trailer and video quests, including GTA VI and NBA 2K27, are handled by **Discord Video Quests**.
+
+**Why did Discord restart?**
+Discord Video Quests has to start Discord in a special mode to work. Restart Discord normally afterwards (just close and reopen it) to switch that off.
+
+**Does it work on Mac?**
+The Video Quests tool should. The Quest Runner is built for Windows and Linux.
+
+---
+
+## 🛠️ Something broke?
+
+| What you see | Try this |
+|---|---|
+| `python3 is required` / Python not found | Install Python 3 from [python.org](https://www.python.org/downloads/) (on Windows tick **tcl/tk** during install), then run the install line again. |
+| `Discord has not loaded your quests yet` | Wait for Discord to fully load, open the **Quests** tab once, then run the tool again. |
+| Video quest says **NOT COMPLETED** | You probably accepted it only a moment ago. Wait 2 minutes and run it again. |
+| The game list is empty | Check your internet. The list is downloaded from Discord the first time. |
+
+## 🗑️ Uninstall
+
+- **Windows:** `& ([scriptblock]::Create((irm https://raw.githubusercontent.com/IamOumarIbrahim/discord-quest-simulator/main/install.ps1))) -Uninstall`
+- **Linux:** `curl -fsSL https://raw.githubusercontent.com/IamOumarIbrahim/discord-quest-simulator/main/install.sh | bash -s -- --uninstall`
+
+---
+
+<details>
+<summary><b>For developers</b></summary>
+
+- `quest_runner.py` lists every game in Discord's public detectable-games list. For each selected game it runs a small window from a copy of the Python binary named like the game's executable (on Windows it also adds a temporary `HKCU` Uninstall entry), which is what Discord's native scanner looks for.
+- `video_quest.py` talks to Discord's own HTTP client through the local debug port (`--remote-debugging-port=9222`) and reports video progress inside the server's allowed window.
+- `discord_console_completer.js` and `discord_quest_simulator.py` are the original Windows tools.
+- Reverse-engineering notes: [docs/TECHNICAL.md](docs/TECHNICAL.md).
+
+</details>
+
+<div align="center">
+
+Made for fun. Not affiliated with Discord. See [LICENSE](LICENSE).
+
+</div>
