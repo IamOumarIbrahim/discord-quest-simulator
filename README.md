@@ -2,6 +2,24 @@
 
 A reverse-engineered toolkit designed to simulate running games for Discord Quest rewards and complete quests.
 
+
+## 🐧 Linux: one-click install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/IamOumarIbrahim/discord-quest-simulator/main/install.sh | bash
+```
+
+Then open **Discord Quest Runner** from your app menu (or run `discord-quest-runner`).
+
+1. Type in the search bar: it filters Discord's full list of detectable games on every keystroke (★ marks games with a current quest).
+2. Double-click games to add them to *Selected*.
+3. Press **Start**, accept the quests in Discord, and keep the app open for about 15 minutes.
+
+Needs `python3` with `tkinter` (`sudo pacman -S tk` / `sudo apt install python3-tk`). Uninstall: `./install.sh --uninstall`.
+
+**How it works on Linux:** Discord's native scanner reads `/proc/<pid>/exe`. For each selected game the app copies the Python binary to a path ending in the game's executable name (for example `.../wwm.exe`) and runs a small window from it. A symlink does not work because it resolves back to `python`.
+Games with no executable in Discord's list (NBA 2K27, GTA VI, Firefox, Exoplanet) can't be triggered this way; use `discord_console_completer.js` for those.
+
 ---
 
 ## 🔍 Root Cause Analysis: How Discord Actually Logs and Verifies Applications
